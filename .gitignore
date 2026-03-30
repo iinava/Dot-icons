@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+# cursor ide files
+.cursor
+/cursor
+.cursorignore
+
+.agents
+/agents
