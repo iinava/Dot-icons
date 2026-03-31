@@ -207,10 +207,16 @@ export default function Home() {
 
       for (let yBg = 0; yBg < TARGET_SIZE; yBg += ASCII_CELL) {
         for (let xBg = 0; xBg < TARGET_SIZE; xBg += ASCII_CELL) {
-          const timeOffset = isAnimating ? Math.floor(time * 5 + (xBg + yBg) * 0.01) : 0;
-          const charIndex = (Math.floor((xBg + yBg)*0.01) + timeOffset) % ASCII_RAMP.length;
-          const randChar = isAnimating ? ASCII_RAMP[charIndex] : ASCII_RAMP[Math.floor(Math.random() * ASCII_RAMP.length)];
-          ctx.fillText(randChar, xBg, yBg);
+          if (isAnimating) {
+            // Predictable blocky noise that updates 8 times a loop to give a generic random-swapping effect
+            const seed = Math.floor(time * 8); 
+            const noise = Math.sin(xBg * 12.9898 + yBg * 78.233 + seed) * 43758.5453;
+            const charIndex = Math.floor(Math.abs(noise)) % ASCII_RAMP.length;
+            ctx.fillText(ASCII_RAMP[charIndex], xBg, yBg);
+          } else {
+            const randChar = ASCII_RAMP[Math.floor(Math.random() * ASCII_RAMP.length)];
+            ctx.fillText(randChar, xBg, yBg);
+          }
         }
       }
     }
