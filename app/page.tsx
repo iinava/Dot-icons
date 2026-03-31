@@ -15,7 +15,8 @@ import {
   Pause,
   Activity,
   Waves,
-  CircleDashed
+  CircleDashed,
+  Wind
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'generator' | 'gallery'>('generator');
 
   const [isAnimating, setIsAnimating] = useState(false);
-  const [animationEffect, setAnimationEffect] = useState<'pulse' | 'ripple' | 'morph'>('pulse');
+  const [animationEffect, setAnimationEffect] = useState<'pulse' | 'ripple' | 'morph' | 'wind'>('pulse');
   const [exportingGif, setExportingGif] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -287,11 +288,21 @@ export default function Home() {
              ctx.scale(1 / safeScale, 1);
              ctx.translate(-cx, -cy);
           } else {
+             let drawCx = cx;
+             let drawCy = cy;
+             
+             if (isAnimating && animationEffect === 'wind') {
+                const windProgress = time * Math.PI + (gx + gy) * 0.015;
+                const maxWind = gridSpacing * 0.35; 
+                drawCx += Math.cos(windProgress) * maxWind;
+                drawCy += Math.sin(windProgress) * maxWind;
+             }
+             
              const isCircle = (gx + gy) % (gridSpacing * 2) === 0;
              if (isCircle) {
-               ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+               ctx.arc(drawCx, drawCy, radius, 0, Math.PI * 2);
              } else {
-               ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
+               ctx.rect(drawCx - radius, drawCy - radius, radius * 2, radius * 2);
              }
           }
           ctx.fill();
@@ -546,12 +557,12 @@ export default function Home() {
                      </div>
                      <div className="space-y-3">
                        <Label className="text-muted-foreground text-xs">Effect Type</Label>
-                       <div className="grid grid-cols-3 gap-2">
+                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                          <Button
                            variant={animationEffect === 'pulse' ? 'default' : 'outline'}
                            size="sm"
                            onClick={() => setAnimationEffect('pulse')}
-                           className="h-8 text-xs px-2"
+                           className="h-8 text-[10px] px-1"
                          >
                            <Activity className="w-3 h-3 mr-1" /> Pulse
                          </Button>
@@ -559,7 +570,7 @@ export default function Home() {
                            variant={animationEffect === 'ripple' ? 'default' : 'outline'}
                            size="sm"
                            onClick={() => setAnimationEffect('ripple')}
-                           className="h-8 text-xs px-2"
+                           className="h-8 text-[10px] px-1"
                          >
                            <Waves className="w-3 h-3 mr-1" /> Ripple
                          </Button>
@@ -567,9 +578,17 @@ export default function Home() {
                            variant={animationEffect === 'morph' ? 'default' : 'outline'}
                            size="sm"
                            onClick={() => setAnimationEffect('morph')}
-                           className="h-8 text-xs px-2"
+                           className="h-8 text-[10px] px-1"
                          >
                            <CircleDashed className="w-3 h-3 mr-1" /> Morph
+                         </Button>
+                         <Button
+                           variant={animationEffect === 'wind' ? 'default' : 'outline'}
+                           size="sm"
+                           onClick={() => setAnimationEffect('wind')}
+                           className="h-8 text-[10px] px-1"
+                         >
+                           <Wind className="w-3 h-3 mr-1" /> Wind
                          </Button>
                        </div>
                      </div>
