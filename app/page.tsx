@@ -14,7 +14,8 @@ import {
   Play,
   Pause,
   Activity,
-  Waves
+  Waves,
+  CircleDashed
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'generator' | 'gallery'>('generator');
 
   const [isAnimating, setIsAnimating] = useState(false);
-  const [animationEffect, setAnimationEffect] = useState<'pulse' | 'ripple'>('pulse');
+  const [animationEffect, setAnimationEffect] = useState<'pulse' | 'ripple' | 'morph'>('pulse');
   const [exportingGif, setExportingGif] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -253,23 +254,45 @@ export default function Home() {
            if (animationEffect === 'pulse') {
              const pulse = Math.sin(time * Math.PI + (gx + gy) * 0.01) * 0.2 + 0.8;
              radius = Math.max(minRadius, Math.min(maxRadius * 1.2, radius * pulse));
-           } else {
+           } else if (animationEffect === 'ripple') {
              const dist = Math.sqrt(Math.pow(gx - TARGET_SIZE/2, 2) + Math.pow(gy - TARGET_SIZE/2, 2));
              const ripple = Math.sin(dist * 0.02 - time * Math.PI) * 0.2 + 0.8;
              radius = Math.max(minRadius, Math.min(maxRadius * 1.2, radius * ripple));
-           }
+           } 
+           // For morph, we keep the original radius to avoid 'pulsing' the size, 
+           // and instead purely transform the shape geometry below.
         }
 
         if (radius > 0.5 && invLum > 0.05) {
-          const isCircle = (gx + gy) % (gridSpacing * 2) === 0;
           const cx = gx + gridSpacing / 2;
           const cy = gy + gridSpacing / 2;
           
           ctx.beginPath();
-          if (isCircle) {
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          if (isAnimating && animationEffect === 'morph') {
+             // 3D Flip/Louver effect - horizontally scales the shape to emulate 3D rotation
+             const flipProgress = time * Math.PI + (gx - gy) * 0.015;
+             const flipScale = Math.cos(flipProgress); 
+             
+             ctx.translate(cx, cy);
+             const safeScale = flipScale === 0 ? 0.001 : flipScale;
+             ctx.scale(safeScale, 1);
+             
+             const isCircle = (gx + gy) % (gridSpacing * 2) === 0;
+             if (isCircle) {
+               ctx.arc(0, 0, radius, 0, Math.PI * 2);
+             } else {
+               ctx.rect(-radius, -radius, radius * 2, radius * 2);
+             }
+             
+             ctx.scale(1 / safeScale, 1);
+             ctx.translate(-cx, -cy);
           } else {
-            ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
+             const isCircle = (gx + gy) % (gridSpacing * 2) === 0;
+             if (isCircle) {
+               ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+             } else {
+               ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
+             }
           }
           ctx.fill();
         }
@@ -523,12 +546,12 @@ export default function Home() {
                      </div>
                      <div className="space-y-3">
                        <Label className="text-muted-foreground text-xs">Effect Type</Label>
-                       <div className="grid grid-cols-2 gap-2">
+                       <div className="grid grid-cols-3 gap-2">
                          <Button
                            variant={animationEffect === 'pulse' ? 'default' : 'outline'}
                            size="sm"
                            onClick={() => setAnimationEffect('pulse')}
-                           className="h-8 text-xs"
+                           className="h-8 text-xs px-2"
                          >
                            <Activity className="w-3 h-3 mr-1" /> Pulse
                          </Button>
@@ -536,9 +559,17 @@ export default function Home() {
                            variant={animationEffect === 'ripple' ? 'default' : 'outline'}
                            size="sm"
                            onClick={() => setAnimationEffect('ripple')}
-                           className="h-8 text-xs"
+                           className="h-8 text-xs px-2"
                          >
                            <Waves className="w-3 h-3 mr-1" /> Ripple
+                         </Button>
+                         <Button
+                           variant={animationEffect === 'morph' ? 'default' : 'outline'}
+                           size="sm"
+                           onClick={() => setAnimationEffect('morph')}
+                           className="h-8 text-xs px-2"
+                         >
+                           <CircleDashed className="w-3 h-3 mr-1" /> Morph
                          </Button>
                        </div>
                      </div>
