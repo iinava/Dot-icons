@@ -55,6 +55,8 @@ export default function Home() {
   const [asciiPattern, setAsciiPattern] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'generator' | 'gallery'>('generator');
 
+  const [invertImage, setInvertImage] = useState(false);
+
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationEffect, setAnimationEffect] = useState<'pulse' | 'ripple' | 'morph' | 'wind'>('pulse');
   const [exportingGif, setExportingGif] = useState(false);
@@ -132,7 +134,7 @@ export default function Home() {
     if (uploadedImage && !isAnimating) {
       generateDotArt(uploadedImage);
     }
-  }, [subjectScale, dotIntensity, gridSpacing, uploadedImage, variation, bgColor, isAnimating]);
+  }, [subjectScale, dotIntensity, gridSpacing, uploadedImage, variation, bgColor, isAnimating, invertImage]);
 
   useEffect(() => {
     if (isAnimating && uploadedImage && imageRef.current) {
@@ -145,7 +147,7 @@ export default function Home() {
       animationRef.current = requestAnimationFrame(animate);
       return () => cancelAnimationFrame(animationRef.current);
     }
-  }, [isAnimating, uploadedImage, subjectScale, dotIntensity, gridSpacing, variation, bgColor, animationEffect]);
+  }, [isAnimating, uploadedImage, subjectScale, dotIntensity, gridSpacing, variation, bgColor, animationEffect, invertImage]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -244,7 +246,7 @@ export default function Home() {
         
         const avg = (rSum + gSum + bSum) / (3 * count);
         const lum = avg / 255;
-        let invLum = 1 - lum; 
+        let invLum = invertImage ? lum : (1 - lum); 
 
         invLum = Math.max(0, Math.min(1, invLum * dotIntensity));
         
@@ -469,6 +471,18 @@ export default function Home() {
                   <span className="text-[10px] mt-1 opacity-70">PNG, JPG or WebP</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                 </Label>
+
+                <div className="flex items-center justify-between bg-muted/30 px-3 py-2 rounded-lg border border-border">
+                  <Label className="text-muted-foreground text-xs">Invert Mask Output</Label>
+                  <Button 
+                    variant={invertImage ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={() => setInvertImage(!invertImage)}
+                    className="h-7 text-[10px] px-3 font-mono uppercase tracking-wider bg-background"
+                  >
+                    {invertImage ? "Inverted" : "Normal"}
+                  </Button>
+                </div>
                 
                 <Button 
                   onClick={handleExport}
