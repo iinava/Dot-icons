@@ -10,12 +10,17 @@ import {
   Settings2,
   Grid3X3,
   Image as ImageIcon,
-  MousePointerSquareDashed
+  MousePointerSquareDashed,
+  Play,
+  Pause,
+  Activity,
+  Waves
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const TARGET_SIZE = 600;
 const SHAPE_COLOR = "rgb(255, 255, 255)";
@@ -48,7 +53,13 @@ export default function Home() {
   const [asciiPattern, setAsciiPattern] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'generator' | 'gallery'>('generator');
 
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationEffect, setAnimationEffect] = useState<'pulse' | 'ripple'>('pulse');
+  const [exportingGif, setExportingGif] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>(0);
+  const imageRef = useRef<HTMLImageElement | null>(null);
 
   const shapes = [
     "heart", "star", "circle", "shield", 
@@ -116,10 +127,23 @@ export default function Home() {
   }, [bgColor]);
 
   useEffect(() => {
-    if (uploadedImage) {
+    if (uploadedImage && !isAnimating) {
       generateDotArt(uploadedImage);
     }
-  }, [subjectScale, dotIntensity, gridSpacing, uploadedImage, variation, bgColor]);
+  }, [subjectScale, dotIntensity, gridSpacing, uploadedImage, variation, bgColor, isAnimating]);
+
+  useEffect(() => {
+    if (isAnimating && uploadedImage && imageRef.current) {
+      const startTime = performance.now();
+      const animate = (time: number) => {
+        const elapsed = (time - startTime) / 1000;
+        renderFrame(elapsed, imageRef.current!);
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      animationRef.current = requestAnimationFrame(animate);
+      return () => cancelAnimationFrame(animationRef.current);
+    }
+  }, [isAnimating, uploadedImage, subjectScale, dotIntensity, gridSpacing, variation, bgColor, animationEffect]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -134,6 +158,16 @@ export default function Home() {
 
   const generateDotArt = (imageSrc: string) => {
     setIsGenerating(true);
+    const img = new window.Image();
+    img.src = imageSrc;
+    img.onload = () => {
+      imageRef.current = img;
+      renderFrame(0, img);
+      setIsGenerating(false);
+    };
+  };
+
+  const renderFrame = (time: number, img: HTMLImageElement) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -142,102 +176,154 @@ export default function Home() {
     canvas.width = TARGET_SIZE;
     canvas.height = TARGET_SIZE;
 
-    const img = new window.Image();
-    img.src = imageSrc;
-    img.onload = () => {
-      const offCanvas = document.createElement('canvas');
-      offCanvas.width = TARGET_SIZE;
-      offCanvas.height = TARGET_SIZE;
-      const offCtx = offCanvas.getContext('2d');
-      if (!offCtx) return;
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = TARGET_SIZE;
+    offCanvas.height = TARGET_SIZE;
+    const offCtx = offCanvas.getContext('2d');
+    if (!offCtx) return;
 
-      Object.assign(offCtx, { fillStyle: 'white' });
-      offCtx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+    Object.assign(offCtx, { fillStyle: 'white' });
+    offCtx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+    
+    const baseScale = Math.min(TARGET_SIZE / img.width, TARGET_SIZE / img.height);
+    const w = img.width * baseScale * subjectScale;
+    const h = img.height * baseScale * subjectScale;
+    const x = (TARGET_SIZE - w) / 2;
+    const y = (TARGET_SIZE - h) / 2;
+    offCtx.drawImage(img, x, y, w, h);
+    
+    const imgData = offCtx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE).data;
+
+    ctx.clearRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+
+    if (variation === 1) {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
       
-      const baseScale = Math.min(TARGET_SIZE / img.width, TARGET_SIZE / img.height);
-      const w = img.width * baseScale * subjectScale;
-      const h = img.height * baseScale * subjectScale;
-      const x = (TARGET_SIZE - w) / 2;
-      const y = (TARGET_SIZE - h) / 2;
-      offCtx.drawImage(img, x, y, w, h);
-      
-      const imgData = offCtx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE).data;
+      ctx.font = `bold ${ASCII_CELL}px monospace`;
+      ctx.fillStyle = getAsciiColor(bgColor);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
 
-      ctx.clearRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+      for (let yBg = 0; yBg < TARGET_SIZE; yBg += ASCII_CELL) {
+        for (let xBg = 0; xBg < TARGET_SIZE; xBg += ASCII_CELL) {
+          const timeOffset = isAnimating ? Math.floor(time * 5 + (xBg + yBg) * 0.01) : 0;
+          const charIndex = (Math.floor((xBg + yBg)*0.01) + timeOffset) % ASCII_RAMP.length;
+          const randChar = isAnimating ? ASCII_RAMP[charIndex] : ASCII_RAMP[Math.floor(Math.random() * ASCII_RAMP.length)];
+          ctx.fillText(randChar, xBg, yBg);
+        }
+      }
+    }
 
-      if (variation === 1) {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+    const maxRadius = Math.max(1, gridSpacing * 0.44);
+    const minRadius = Math.max(0.2, gridSpacing * 0.11);
+
+    ctx.fillStyle = variation === 3 ? SHAPE_COLOR_BLACK : SHAPE_COLOR;
+    for (let gy = 0; gy < TARGET_SIZE; gy += gridSpacing) {
+      for (let gx = 0; gx < TARGET_SIZE; gx += gridSpacing) {
+        let rSum = 0, gSum = 0, bSum = 0;
+        let count = 0;
         
-        ctx.font = `bold ${ASCII_CELL}px monospace`;
-        ctx.fillStyle = getAsciiColor(bgColor);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-
-        for (let yBg = 0; yBg < TARGET_SIZE; yBg += ASCII_CELL) {
-          for (let xBg = 0; xBg < TARGET_SIZE; xBg += ASCII_CELL) {
-            const randChar = ASCII_RAMP[Math.floor(Math.random() * ASCII_RAMP.length)];
-            ctx.fillText(randChar, xBg, yBg);
+        for (let py = gy; py < gy + gridSpacing && py < TARGET_SIZE; py++) {
+          for (let px = gx; px < gx + gridSpacing && px < TARGET_SIZE; px++) {
+            const idx = (py * TARGET_SIZE + px) * 4;
+            rSum += imgData[idx];
+            gSum += imgData[idx+1];
+            bSum += imgData[idx+2];
+            count++;
           }
         }
-      }
+        
+        const avg = (rSum + gSum + bSum) / (3 * count);
+        const lum = avg / 255;
+        let invLum = 1 - lum; 
 
-      const maxRadius = Math.max(1, gridSpacing * 0.44);
-      const minRadius = Math.max(0.2, gridSpacing * 0.11);
+        invLum = Math.max(0, Math.min(1, invLum * dotIntensity));
+        
+        let radius = minRadius + invLum * (maxRadius - minRadius);
+        radius = Math.max(minRadius, Math.min(maxRadius, radius));
+        
+        if (isAnimating) {
+           if (animationEffect === 'pulse') {
+             const pulse = Math.sin(time * 3 + (gx + gy) * 0.01) * 0.2 + 0.8;
+             radius = Math.max(minRadius, Math.min(maxRadius * 1.2, radius * pulse));
+           } else {
+             const dist = Math.sqrt(Math.pow(gx - TARGET_SIZE/2, 2) + Math.pow(gy - TARGET_SIZE/2, 2));
+             const ripple = Math.sin(dist * 0.02 - time * 4) * 0.2 + 0.8;
+             radius = Math.max(minRadius, Math.min(maxRadius * 1.2, radius * ripple));
+           }
+        }
 
-      ctx.fillStyle = variation === 3 ? SHAPE_COLOR_BLACK : SHAPE_COLOR;
-      for (let gy = 0; gy < TARGET_SIZE; gy += gridSpacing) {
-        for (let gx = 0; gx < TARGET_SIZE; gx += gridSpacing) {
-          let rSum = 0, gSum = 0, bSum = 0;
-          let count = 0;
+        if (radius > 0.5 && invLum > 0.05) {
+          const isCircle = (gx + gy) % (gridSpacing * 2) === 0;
+          const cx = gx + gridSpacing / 2;
+          const cy = gy + gridSpacing / 2;
           
-          for (let py = gy; py < gy + gridSpacing && py < TARGET_SIZE; py++) {
-            for (let px = gx; px < gx + gridSpacing && px < TARGET_SIZE; px++) {
-              const idx = (py * TARGET_SIZE + px) * 4;
-              rSum += imgData[idx];
-              gSum += imgData[idx+1];
-              bSum += imgData[idx+2];
-              count++;
-            }
+          ctx.beginPath();
+          if (isCircle) {
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          } else {
+            ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
           }
-          
-          const avg = (rSum + gSum + bSum) / (3 * count);
-          const lum = avg / 255;
-          let invLum = 1 - lum; 
-
-          invLum = Math.max(0, Math.min(1, invLum * dotIntensity));
-          
-          let radius = minRadius + invLum * (maxRadius - minRadius);
-          radius = Math.max(minRadius, Math.min(maxRadius, radius));
-          
-          if (radius > 0.5 && invLum > 0.05) {
-            const isCircle = Math.random() < 0.5;
-            const cx = gx + gridSpacing / 2;
-            const cy = gy + gridSpacing / 2;
-            
-            ctx.beginPath();
-            if (isCircle) {
-              ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            } else {
-              ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
-            }
-            ctx.fill();
-          }
+          ctx.fill();
         }
       }
-
-      setIsGenerating(false);
-    };
+    }
   };
 
-  const handleExport = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dataUrl = canvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = variation === 1 ? "custom_dot_icon.png" : "custom_dot_icon_transparent.png";
-    link.href = dataUrl;
-    link.click();
+  const handleExport = async () => {
+    if (isAnimating && imageRef.current) {
+      setExportingGif(true);
+      const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
+      const gif = GIFEncoder();
+      
+      const frames = 20;
+      const fps = 15;
+      const delay = 1000 / fps;
+      
+      for (let i = 0; i < frames; i++) {
+        const time = (i / frames) * Math.PI; 
+        renderFrame(time, imageRef.current);
+        
+        const canvas = canvasRef.current;
+        if (!canvas) continue;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) continue;
+        
+        const imageData = ctx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE);
+        const data = imageData.data;
+        
+        const palette = quantize(data, 256, { format: 'rgba4444' });
+        const index = applyPalette(data, palette, 'rgba4444');
+        
+        gif.writeFrame(index, TARGET_SIZE, TARGET_SIZE, { palette, delay });
+      }
+      
+      gif.finish();
+      const buffer = gif.bytes();
+      const blob = new Blob([buffer], { type: 'image/gif' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement("a");
+      link.download = "animated_dot_icon.gif";
+      link.href = url;
+      link.click();
+      
+      URL.revokeObjectURL(url);
+      setExportingGif(false);
+      
+      if (document.timeline) {
+         renderFrame(performance.now() / 1000, imageRef.current);
+      }
+    } else {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.download = variation === 1 ? "custom_dot_icon.png" : "custom_dot_icon_transparent.png";
+      link.href = dataUrl;
+      link.click();
+    }
   };
 
   const handleGridDownload = async (e: React.MouseEvent, s: string) => {
@@ -344,60 +430,114 @@ export default function Home() {
                 
                 <Button 
                   onClick={handleExport}
-                  disabled={!uploadedImage || isGenerating}
+                  disabled={!uploadedImage || isGenerating || exportingGif}
                   className="w-full h-10 shadow-sm"
                 >
-                  <Download className="w-4 h-4 mr-2" /> Export Render
+                  <Download className="w-4 h-4 mr-2" /> {exportingGif ? "Encoding GIF..." : isAnimating ? "Export GIF" : "Export Render"}
                 </Button>
              </div>
 
-             {/* Engine Tuning Module */}
-             <div className="space-y-6 pt-6 border-t border-border/50">
-               <div className="flex items-center gap-2 mb-2">
-                  <Settings2 className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-semibold tracking-tight">Engine Parameters</h3>
-               </div>
-               
-               <div className="space-y-4">
-                 <div className="flex justify-between items-center text-xs">
-                   <Label className="text-muted-foreground">Grid Density</Label>
-                   <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border">{gridSpacingInput}px</span>
-                 </div>
-                 <Slider min={4} max={36} step={2} value={[gridSpacingInput]} onValueChange={val => setGridSpacingInput(val[0])} />
-               </div>
-
-               <div className="space-y-4">
-                 <div className="flex justify-between items-center text-xs">
-                   <Label className="text-muted-foreground">Subject Scale</Label>
-                   <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border">{subjectScaleInput.toFixed(2)}x</span>
-                 </div>
-                 <Slider min={0.2} max={1.5} step={0.05} value={[subjectScaleInput]} onValueChange={val => setSubjectScaleInput(val[0])} />
-               </div>
-
-               <div className="space-y-4">
-                 <div className="flex justify-between items-center text-xs">
-                   <Label className="text-muted-foreground">Dot Exposure</Label>
-                   <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border">{dotIntensityInput.toFixed(2)}x</span>
-                 </div>
-                 <Slider min={0.1} max={3.0} step={0.1} value={[dotIntensityInput]} onValueChange={val => setDotIntensityInput(val[0])} />
-               </div>
-
-               {/* Background Color Picker for V1 */}
-               {variation === 1 && (
-                 <div className="space-y-3 pt-2">
-                   <div className="flex justify-between items-center text-xs">
-                     <Label className="text-muted-foreground">Matrix Color</Label>
-                     <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border uppercase">{bgColorInput}</span>
+             <Accordion type="single" collapsible defaultValue="parameters" className="w-full">
+               {/* Engine Tuning Module */}
+               <AccordionItem value="parameters" className="border-b-0 border-t border-border/50">
+                 <AccordionTrigger className="hover:no-underline py-4 text-sm font-semibold tracking-tight">
+                   <div className="flex items-center gap-2">
+                     <Settings2 className="w-4 h-4 text-primary" />
+                     Engine Parameters
                    </div>
-                   <input 
-                     type="color" 
-                     value={bgColorInput}
-                     onChange={e => setBgColorInput(e.target.value)}
-                     className="w-full h-10 rounded-lg cursor-pointer bg-transparent shadow-sm border border-border"
-                   />
-                 </div>
-               )}
-             </div>
+                 </AccordionTrigger>
+                 <AccordionContent>
+                   <div className="space-y-6 pt-2 pb-4">
+                     <div className="space-y-4">
+                       <div className="flex justify-between items-center text-xs">
+                         <Label className="text-muted-foreground">Grid Density</Label>
+                         <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border">{gridSpacingInput}px</span>
+                       </div>
+                       <Slider min={4} max={36} step={2} value={[gridSpacingInput]} onValueChange={val => setGridSpacingInput(val[0])} />
+                     </div>
+
+                     <div className="space-y-4">
+                       <div className="flex justify-between items-center text-xs">
+                         <Label className="text-muted-foreground">Subject Scale</Label>
+                         <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border">{subjectScaleInput.toFixed(2)}x</span>
+                       </div>
+                       <Slider min={0.2} max={1.5} step={0.05} value={[subjectScaleInput]} onValueChange={val => setSubjectScaleInput(val[0])} />
+                     </div>
+
+                     <div className="space-y-4">
+                       <div className="flex justify-between items-center text-xs">
+                         <Label className="text-muted-foreground">Dot Exposure</Label>
+                         <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border">{dotIntensityInput.toFixed(2)}x</span>
+                       </div>
+                       <Slider min={0.1} max={3.0} step={0.1} value={[dotIntensityInput]} onValueChange={val => setDotIntensityInput(val[0])} />
+                     </div>
+
+                     {/* Background Color Picker for V1 */}
+                     {variation === 1 && (
+                       <div className="space-y-3 pt-2">
+                         <div className="flex justify-between items-center text-xs">
+                           <Label className="text-muted-foreground">Matrix Color</Label>
+                           <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded-md border border-border uppercase">{bgColorInput}</span>
+                         </div>
+                         <input 
+                           type="color" 
+                           value={bgColorInput}
+                           onChange={e => setBgColorInput(e.target.value)}
+                           className="w-full h-10 rounded-lg cursor-pointer bg-transparent shadow-sm border border-border"
+                         />
+                       </div>
+                     )}
+                   </div>
+                 </AccordionContent>
+               </AccordionItem>
+               
+               {/* Animation Module */}
+               <AccordionItem value="animate" className="border-b-0 border-t border-border/50">
+                 <AccordionTrigger className="hover:no-underline py-4 text-sm font-semibold tracking-tight">
+                   <div className="flex items-center gap-2">
+                     <Activity className="w-4 h-4 text-primary" />
+                     Animate Engine
+                   </div>
+                 </AccordionTrigger>
+                 <AccordionContent>
+                   <div className="space-y-6 pt-2 pb-4">
+                     <div className="flex items-center justify-between">
+                       <Label className="text-muted-foreground">Animation</Label>
+                       <Button 
+                         variant={isAnimating ? "default" : "outline"} 
+                         size="sm" 
+                         onClick={() => setIsAnimating(!isAnimating)}
+                         className="h-7 text-xs"
+                       >
+                         {isAnimating ? <Pause className="w-3 h-3 mr-1" /> : <Play className="w-3 h-3 mr-1" />}
+                         {isAnimating ? "On" : "Off"}
+                       </Button>
+                     </div>
+                     <div className="space-y-3">
+                       <Label className="text-muted-foreground text-xs">Effect Type</Label>
+                       <div className="grid grid-cols-2 gap-2">
+                         <Button
+                           variant={animationEffect === 'pulse' ? 'default' : 'outline'}
+                           size="sm"
+                           onClick={() => setAnimationEffect('pulse')}
+                           className="h-8 text-xs"
+                         >
+                           <Activity className="w-3 h-3 mr-1" /> Pulse
+                         </Button>
+                         <Button
+                           variant={animationEffect === 'ripple' ? 'default' : 'outline'}
+                           size="sm"
+                           onClick={() => setAnimationEffect('ripple')}
+                           className="h-8 text-xs"
+                         >
+                           <Waves className="w-3 h-3 mr-1" /> Ripple
+                         </Button>
+                       </div>
+                     </div>
+                   </div>
+                 </AccordionContent>
+               </AccordionItem>
+             </Accordion>
 
              {/* Quick Preload Presets */}
              <div className="space-y-4 pt-6 border-t border-border/50">
@@ -481,9 +621,9 @@ export default function Home() {
                        <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
                        <span className="font-mono text-[10px] font-bold tracking-widest uppercase text-foreground">Live Render</span>
                      </div>
-                     {isGenerating && (
+                     {(isGenerating || exportingGif) && (
                        <div className="flex items-center gap-2 bg-blue-500/10 text-blue-500 px-3 py-1.5 rounded-lg border border-blue-500/20 shadow-sm ml-0 animate-in fade-in slide-in-from-left-2">
-                         <span className="font-mono text-[10px] font-bold tracking-widest uppercase">Processing Raster...</span>
+                         <span className="font-mono text-[10px] font-bold tracking-widest uppercase">{exportingGif ? "Encoding GIF..." : "Processing Raster..."}</span>
                        </div>
                      )}
                   </div>
