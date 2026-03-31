@@ -245,11 +245,11 @@ export default function Home() {
         
         if (isAnimating) {
            if (animationEffect === 'pulse') {
-             const pulse = Math.sin(time * 3 + (gx + gy) * 0.01) * 0.2 + 0.8;
+             const pulse = Math.sin(time * Math.PI + (gx + gy) * 0.01) * 0.2 + 0.8;
              radius = Math.max(minRadius, Math.min(maxRadius * 1.2, radius * pulse));
            } else {
              const dist = Math.sqrt(Math.pow(gx - TARGET_SIZE/2, 2) + Math.pow(gy - TARGET_SIZE/2, 2));
-             const ripple = Math.sin(dist * 0.02 - time * 4) * 0.2 + 0.8;
+             const ripple = Math.sin(dist * 0.02 - time * Math.PI) * 0.2 + 0.8;
              radius = Math.max(minRadius, Math.min(maxRadius * 1.2, radius * ripple));
            }
         }
@@ -277,12 +277,14 @@ export default function Home() {
       const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
       const gif = GIFEncoder();
       
-      const frames = 20;
       const fps = 15;
-      const delay = 1000 / fps;
+      const duration = 2; // 2 seconds for a perfect loop
+      const frames = fps * duration;
+      const delay = Math.round(1000 / fps);
       
       for (let i = 0; i < frames; i++) {
-        const time = (i / frames) * Math.PI; 
+        // Match exact virtual time to frame index to perfectly match the preview clock
+        const time = (i / frames) * duration; 
         renderFrame(time, imageRef.current);
         
         const canvas = canvasRef.current;
