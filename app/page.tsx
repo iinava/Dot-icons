@@ -319,10 +319,16 @@ export default function Home() {
       const { GIFEncoder, quantize, applyPalette } = await import('gifenc');
       const gif = GIFEncoder();
       
-      const fps = 15;
+      const fps = 20; // Exact 50ms delay universally
       const duration = 2; // 2 seconds for a perfect loop
       const frames = fps * duration;
-      const delay = Math.round(1000 / fps);
+      const delay = 50;
+      
+      // Temporary canvas to composite graphics with solid background
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = TARGET_SIZE;
+      tmpCanvas.height = TARGET_SIZE;
+      const tmpCtx = tmpCanvas.getContext('2d');
       
       for (let i = 0; i < frames; i++) {
         // Match exact virtual time to frame index to perfectly match the preview clock
@@ -330,15 +336,26 @@ export default function Home() {
         renderFrame(time, imageRef.current);
         
         const canvas = canvasRef.current;
-        if (!canvas) continue;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) continue;
+        if (!canvas || !tmpCtx) continue;
         
-        const imageData = ctx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE);
+        // Clear temp canvas
+        tmpCtx.clearRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+        
+        // Composite the drawn frame over a solid background to prevent anti-aliasing artifacts in quantized GIF
+        if (variation !== 1) {
+           tmpCtx.fillStyle = variation === 3 
+             ? (theme === 'dark' ? '#ffffff' : '#f3f4f6') 
+             : (theme === 'dark' ? '#0d0d0d' : '#f3f4f6');
+           tmpCtx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+        }
+        
+        tmpCtx.drawImage(canvas, 0, 0);
+        
+        const imageData = tmpCtx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE);
         const data = imageData.data;
         
-        const palette = quantize(data, 256, { format: 'rgba4444' });
-        const index = applyPalette(data, palette, 'rgba4444');
+        const palette = quantize(data, 256, { format: 'rgb565' });
+        const index = applyPalette(data, palette, 'rgb565');
         
         gif.writeFrame(index, TARGET_SIZE, TARGET_SIZE, { palette, delay });
       }
