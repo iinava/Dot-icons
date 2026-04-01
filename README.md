@@ -1,6 +1,16 @@
 # Doticon
 
 **Doticon** is a powerful web-based generative engine that transforms any image into dynamic, animated "dot art" or ASCII matrix-style icons. Built with Next.js and the HTML5 Canvas API, Doticon offers real-time rendering, interactive tuning, and high-quality GIF and PNG exports.
+<div align="center">
+  <table>
+    <tr>
+      <td><img src="https://github.com/user-attachments/assets/0ccb31f1-bebf-4db4-92b1-af5d8950bf3d" width="200"/></td>
+       <td><img src="https://github.com/user-attachments/assets/e68bdcfc-c7c6-46a7-baae-fe8e4d77352c" width="200"/></td>
+      <td><img src="https://github.com/user-attachments/assets/29a9c1ec-1d03-4e62-9a49-14a2d3d843fc" width="200"/></td>
+    </tr>
+  </table>
+</div>
+
 
 ## Features
 
