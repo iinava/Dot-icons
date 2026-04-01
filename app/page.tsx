@@ -60,6 +60,7 @@ export default function Home() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationEffect, setAnimationEffect] = useState<'pulse' | 'ripple' | 'morph' | 'wind'>('pulse');
   const [exportingGif, setExportingGif] = useState(false);
+  const [imageLoadedTime, setImageLoadedTime] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
@@ -131,23 +132,41 @@ export default function Home() {
   }, [bgColor]);
 
   useEffect(() => {
-    if (uploadedImage && !isAnimating) {
-      generateDotArt(uploadedImage);
+    if (uploadedImage) {
+      setIsGenerating(true);
+      const img = new window.Image();
+      img.src = uploadedImage;
+      img.onload = () => {
+        imageRef.current = img;
+        setImageLoadedTime(Date.now());
+        setIsGenerating(false);
+      };
     }
-  }, [subjectScale, dotIntensity, gridSpacing, uploadedImage, variation, bgColor, isAnimating, invertImage]);
+  }, [uploadedImage]);
 
   useEffect(() => {
-    if (isAnimating && uploadedImage && imageRef.current) {
+    if (!isAnimating && imageRef.current) {
+      renderFrame(0, imageRef.current);
+    }
+  }, [imageLoadedTime, subjectScale, dotIntensity, gridSpacing, variation, bgColor, isAnimating, invertImage]);
+
+  useEffect(() => {
+    if (isAnimating && imageRef.current) {
+      let isCancelled = false;
       const startTime = performance.now();
       const animate = (time: number) => {
+        if (isCancelled) return;
         const elapsed = (time - startTime) / 1000;
         renderFrame(elapsed, imageRef.current!);
         animationRef.current = requestAnimationFrame(animate);
       };
       animationRef.current = requestAnimationFrame(animate);
-      return () => cancelAnimationFrame(animationRef.current);
+      return () => {
+        isCancelled = true;
+        cancelAnimationFrame(animationRef.current);
+      }
     }
-  }, [isAnimating, uploadedImage, subjectScale, dotIntensity, gridSpacing, variation, bgColor, animationEffect, invertImage]);
+  }, [isAnimating, imageLoadedTime, subjectScale, dotIntensity, gridSpacing, variation, bgColor, animationEffect, invertImage]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -158,17 +177,6 @@ export default function Home() {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const generateDotArt = (imageSrc: string) => {
-    setIsGenerating(true);
-    const img = new window.Image();
-    img.src = imageSrc;
-    img.onload = () => {
-      imageRef.current = img;
-      renderFrame(0, img);
-      setIsGenerating(false);
-    };
   };
 
   const renderFrame = (time: number, img: HTMLImageElement) => {
