@@ -280,23 +280,24 @@ export default function Home() {
           
           ctx.beginPath();
           if (isAnimating && animationEffect === 'morph') {
-             // 3D Flip/Louver effect - horizontally scales the shape to emulate 3D rotation
-             const flipProgress = time * Math.PI + (gx - gy) * 0.015;
-             const flipScale = Math.cos(flipProgress); 
+             // Smooth geometry morph from circle to square and back, avoiding scale collapsing lines
+             let morphProgress = Math.sin(time * Math.PI + (gx + gy) * 0.015) * 0.5 + 0.5; // 0 (square) to 1 (circle)
              
-             ctx.translate(cx, cy);
-             const safeScale = flipScale === 0 ? 0.001 : flipScale;
-             ctx.scale(safeScale, 1);
-             
-             const isCircle = (gx + gy) % (gridSpacing * 2) === 0;
-             if (isCircle) {
-               ctx.arc(0, 0, radius, 0, Math.PI * 2);
-             } else {
-               ctx.rect(-radius, -radius, radius * 2, radius * 2);
+             const isCirclePos = (gx + gy) % (gridSpacing * 2) === 0;
+             if (!isCirclePos) {
+                 morphProgress = 1 - morphProgress; // Alternating grid cells morph in reverse
              }
              
-             ctx.scale(1 / safeScale, 1);
-             ctx.translate(-cx, -cy);
+             const currentBorderRadius = radius * morphProgress;
+             
+             // Use standard modern roundRect for morphing
+             if (ctx.roundRect) {
+               ctx.roundRect(cx - radius, cy - radius, radius * 2, radius * 2, currentBorderRadius);
+             } else {
+               // Fallback
+               if (morphProgress > 0.5) ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+               else ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
+             }
           } else {
              let drawCx = cx;
              let drawCy = cy;
